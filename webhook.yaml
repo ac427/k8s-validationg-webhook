@@ -1,0 +1,52 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ac-webhook-issuer
+  namespace: test
+spec:
+  selfSigned: {}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: billing-check-webhook
+  namespace: test
+spec:
+  commonName: billing-check-webhook.test.svc
+  dnsNames:
+  - billing-check-webhook.test.svc.svc.cluster.local
+  - billing-check-webhook.test.svc
+  issuerRef:
+    kind: Issuer
+    name: ac-webhook-issuer
+  secretName: billing-check-server-cert
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: billing-validating-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: test/billing-check-webhook
+webhooks:
+- name: billing-check-webhook.test.svc
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: billing-check-webhook
+      namespace: test
+      path: /validate
+      port: 443
+  sideEffects: None
+  failurePolicy: Fail
+  rules:
+  - apiGroups: ["infrastructure.cluster.x-k8s.io"]
+    resources:
+      - "awsmachinepools"
+    apiVersions:
+      - "*"
+    operations:
+      - CREATE
+      - UPDATE
